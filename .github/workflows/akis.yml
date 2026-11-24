@@ -12,7 +12,7 @@ name: Akış
 # gönderince (takip_verisi/) dosyalar veritabanına işlenir ("takip" akışı).
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "3,18,33,48 * * * *"
   push:
     branches: [main]
     paths: ["sayfa/**", "sayfa_derle.py", "takip_verisi/**"]
