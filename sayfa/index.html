@@ -136,7 +136,7 @@ footer a { color: inherit; }
   <div id="view-gecmis" hidden>
     <section>
       <h2>Model ne kadar isabetli</h2>
-      <p class="lead">İlk iki kutu, geçmiş günlerin üst ve alt seçimlerinden kaçının tuttuğunu gösterir. Diğer kutular modelin tahmin hatasını, oyuncunun o güne kadarki sezon ortalamasını tahmin saymakla karşılaştırır; artı değer, modelin o kadar daha az şaştığını gösterir.</p>
+      <p class="lead">“Canlı günler” kutusu yalnızca sistemin maçtan önce yayımladığı seçimleri sayar; modelin gerçek sınavı odur. Üst ve alt kutuları, geriye dönük günler dahil bütün geçmiş günlerin seçimlerinden kaçının tuttuğunu gösterir. Diğer kutular modelin tahmin hatasını, oyuncunun o güne kadarki sezon ortalamasını tahmin saymakla karşılaştırır; artı değer, modelin o kadar daha az şaştığını gösterir.</p>
       <div class="tiles" id="tiles"><div class="empty">Özet bekleniyor…</div></div>
     </section>
     <section>
@@ -279,7 +279,12 @@ function renderToday(g) {
 
 function renderTiles(o) {
   const t = $("tiles"); t.replaceChildren();
-  const ua = o.ust_alt_gecmis || {};
+  const ua = o.ust_alt_gecmis || {}, canli = o.ust_alt_canli;
+  if (canli && canli.ust[0] + canli.alt[0]) {      /* yalnızca maçtan önce yayımlanan seçimler */
+    const n = canli.ust[0] + canli.alt[0], tutan = canli.ust[1] + canli.alt[1], k = el("div", "tile");
+    k.append(el("div", "num", "%" + fmt(100 * tutan / n, 0)), el("small", null, "Canlı günler (" + canli.gun + " gün): " + n + " seçimin " + tutan + " tanesi tuttu · üst "
+      + canli.ust[1] + " / " + canli.ust[0] + ", alt " + canli.alt[1] + " / " + canli.alt[0])); t.append(k);
+  }
   for (const [ad, x] of [["Üst", ua.ust], ["Alt", ua.alt]]) {
     if (!x || !x[0]) continue;
     const k = el("div", "tile"); k.append(el("div", "num", "%" + fmt(100 * x[1] / x[0], 0)), el("small", null, ad + " seçimleri: " + x[0] + " seçimin " + x[1] + " tanesi tuttu")); t.append(k);

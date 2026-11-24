@@ -166,14 +166,17 @@ def hazirla(conn):
         for s in conn.execute("SELECT DISTINCT tarih FROM tahminler WHERE tur = ? AND gerceklesen IS NOT NULL", (tur,)):
             gunler[s[0]] = tur
     ua_gecmis = {"ust": [0, 0], "alt": [0, 0], "gun": 0}          # taraf: [sonuçlanan seçim sayısı, tutan]
+    ua_canli = {"ust": [0, 0], "alt": [0, 0], "gun": 0}           # aynısı, yalnızca maçtan önce yayımlanan (canlı) günler için
     ua_bant = {}                                                   # (taraf, güven bandı): [sonuçlanan seçim sayısı, tutan]
     for tarih in sorted(gunler)[-GECMIS_GUN:]:
         ua = gecmis_ust_alt(conn, tarih, gunler[tarih])
         puanli = [x for x in ua if x["tuttu"] is not None]         # oynamayan oyuncunun seçimi sayılmaz
-        ua_gecmis["gun"] += bool(puanli)
+        for sayac in (ua_gecmis, ua_canli) if gunler[tarih] == "canli" else (ua_gecmis,):
+            sayac["gun"] += bool(puanli)
+            for x in puanli:
+                sayac[x["taraf"]][0] += 1
+                sayac[x["taraf"]][1] += x["tuttu"]
         for x in puanli:
-            ua_gecmis[x["taraf"]][0] += 1
-            ua_gecmis[x["taraf"]][1] += x["tuttu"]
             b = ua_bant.setdefault((x["taraf"], ua_bandi(x["olasilik"])), [0, 0])
             b[0] += 1
             b[1] += x["tuttu"]
@@ -201,6 +204,7 @@ def hazirla(conn):
         "bugun": bugun, "guncelleme": veritabani.simdi_utc(), "model": model,
         "gecmis": {"gun": len(gunler)},
         "ust_alt_gecmis": ua_gecmis,
+        "ust_alt_canli": ua_canli,
         "acik_etkenler": [ad for ad, a in config.ETKENLER.items() if a["acik"]]})
     (KLASOR / "yazilacaklar.json").write_text(json.dumps(yazilacak, ensure_ascii=False, indent=1), encoding="utf-8")
     return yazilacak
