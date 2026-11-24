@@ -13,7 +13,9 @@ tetiklemenin işini sonraki tetikleme yapar. Saatler bilgisayardakiyle aynıdır
 
 Tamamlanamayan sabah ve akşam akışı günde en çok DENEME_SINIRI kez denenir.
 
-    python bulut.py karar [otomatik|sabah|mac_oncesi|yaklasan|haftalik]   "kip=..." ve "gerekce=..." satırlarını yazar
+    python bulut.py karar [otomatik|sabah|mac_oncesi|yaklasan|haftalik|sayfa]   "kip=..." ve "gerekce=..." satırlarını yazar
+                                                                          (sayfa yalnızca elle seçilir: veri toplamadan
+                                                                          sayfa verisini yeniden üretip sayfayı yayımlar)
     python bulut.py kaydet haftalik <çıkış kodu> <süre sn>                haftalik.py sonucunu calisma_kaydi tablosuna yazar
 
 Yalnızca standart kitaplığı kullanır: iş akışında bağımlılıklar kurulmadan önce çalışır.
@@ -29,6 +31,7 @@ import veritabani
 TR = ZoneInfo("Europe/Istanbul")          # config.py'deki çalıştırma saatleri Türkiye saatidir
 GUN_ADLARI = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 KIPLER = ("sabah", "haftalik", "mac_oncesi", "yaklasan", "yok")
+ELLE_SECILEBILEN = ("otomatik",) + KIPLER[:-1] + ("sayfa",)
 DENEME_SINIRI = 3
 
 
@@ -92,7 +95,7 @@ def main(argv):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     komut, *gerisi = argv or [""]
-    if komut == "karar" and len(gerisi) <= 1 and (gerisi or ["otomatik"])[0] in ("otomatik",) + KIPLER[:-1]:
+    if komut == "karar" and len(gerisi) <= 1 and (gerisi or ["otomatik"])[0] in ELLE_SECILEBILEN:
         istenen = (gerisi or ["otomatik"])[0]
         if istenen != "otomatik":
             kip, gerekce = istenen, "elle seçildi"

@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<meta name="description" content="NBA maç günleri için modelin en emin olduğu üst / alt seçimleri ve geçmiş sonuçları.">
+<title>NBA Günün Seçimleri</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23d9581f'/%3E%3Cpath d='M2 16h28M16 2v28M6 6c5 4 5 16 0 20M26 6c-5 4-5 16 0 20' fill='none' stroke='%23141b2b' stroke-width='1.6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Düzen: üstte sabit sekme şeridi; altında tek sütun. Seçim kartı: oyuncu, güven yüzdesi, taraf ve barem, altta sonuç ya da güven derecesi. */
+:root {
+  --bg: #f1f4f8; --surface: #ffffff; --ink: #141b2b; --muted: #5a6477; --line: #d8dee9; --chip: #e8edf5;
+  --accent: #d9581f; --good: #1c8556; --bad: #c03d37; --track: #dfe5ee;
+  --display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0e131e; --surface: #161d2c; --ink: #e9edf5; --muted: #95a1b8; --line: #283147; --chip: #212a3d;
+  --accent: #ff8b4d; --good: #4fc48c; --bad: #f07b74; --track: #2a3348; } }
+
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; -webkit-text-size-adjust: 100%; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.wrap { max-width: 1060px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.bar .wrap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 24px; padding-block: 10px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: .01em; margin: 0; text-transform: uppercase; }
+h1 span { color: var(--accent); }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav a { font-family: var(--display); font-weight: 600; font-size: 18px; letter-spacing: .03em; text-transform: uppercase; text-decoration: none; color: var(--muted); padding: 2px 10px; border-radius: 4px; }
+nav a[aria-current="page"] { color: var(--surface); background: var(--ink); }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+main { padding-block: 22px 40px; display: flex; flex-direction: column; gap: 26px; }
+h2 { font-family: var(--display); font-weight: 600; font-size: 22px; letter-spacing: .03em; text-transform: uppercase; margin: 0; text-wrap: balance; }
+.lead { color: var(--muted); max-width: 68ch; margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: 13.5px; }
+.meta b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+section { display: flex; flex-direction: column; gap: 12px; }
+main > div { display: flex; flex-direction: column; gap: 26px; }
+main > div[hidden] { display: none; }
+.num { font-family: var(--display); font-variant-numeric: tabular-nums; }
+.chip { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); white-space: nowrap; }
+.chip.good { color: var(--good); } .chip.bad { color: var(--bad); } .chip.hot { color: var(--accent); }
+
+/* Seçim satırları */
+.picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 10px; }
+.pick { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; min-width: 0; }
+.pick .who { font-weight: 600; overflow-wrap: anywhere; } .pick .sub { color: var(--muted); font-size: 13px; }
+.pick .val { grid-row: span 2; text-align: right; line-height: 1; }
+.pick .val .num { font-size: 38px; font-weight: 700; } .pick .val small { display: block; color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; margin-top: 3px; }
+.pick .call { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-family: var(--display); font-size: 24px; font-weight: 600; line-height: 1.2; margin-top: 4px; }
+.pick .call .chip { font-family: var(--body); font-size: 13px; letter-spacing: .06em; }
+.pick .foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: space-between; margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+
+/* Açılır gün satırları */
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+summary { cursor: pointer; padding: 10px 14px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary .t { font-family: var(--display); font-weight: 600; font-size: 20px; letter-spacing: .02em; }
+summary .r { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; border-top: 1px solid var(--line); }
+
+/* Özet kutuları */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; }
+.tile .num { font-size: 30px; font-weight: 700; line-height: 1.1; } .tile small { color: var(--muted); font-size: 12.5px; display: block; }
+.empty { color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 6px; padding: 18px; }
+
+/* Üst / Alt */
+button { font: 600 14px var(--body); color: var(--surface); background: var(--ink); border: 0; border-radius: 6px; padding: 10px 16px; cursor: pointer; }
+.form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+.form input, .form select { font: 16px var(--body); padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); min-width: 0; width: 100%; }
+.form input:focus-visible, .form select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ou { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+.ou .who { font-weight: 600; } .ou .sub { color: var(--muted); font-size: 13.5px; }
+.sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.side { padding: 10px 14px; border-radius: 6px; background: var(--chip); }
+.side.win { background: var(--ink); color: var(--surface); }
+.side small { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
+.side .num { display: block; font-size: 44px; font-weight: 700; line-height: 1; }
+.split { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+.split i { display: block; height: 100%; background: var(--accent); }
+
+footer { border-top: 1px solid var(--line); padding-block: 16px calc(28px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 13px; }
+footer p { margin: 0 0 4px; max-width: 78ch; }
+footer a { color: inherit; }
+@media (prefers-reduced-motion: no-preference) { details[open] > .scroll { animation: in .15s ease-out; } @keyframes in { from { opacity: .4 } to { opacity: 1 } } }
+</style>
+</head>
+<body>
+
+<div class="bar"><div class="wrap">
+  <h1>NBA <span>Günün Seçimleri</span></h1>
+  <nav aria-label="Bölümler">
+    <a href="#bugun" id="tab-bugun">Bugün</a>
+    <a href="#ust-alt" id="tab-ust-alt">Üst / Alt</a>
+    <a href="#gecmis" id="tab-gecmis">Geçmiş</a>
+  </nav>
+</div></div>
+
+<main class="wrap">
+  <div id="view-bugun">
+    <section>
+      <div class="meta" id="meta"><span>Veri bekleniyor…</span></div>
+      <p class="lead"><b>Güven yüzdesi</b>, modelin o tarafın tutacağına verdiği olasılıktır. <b>Güven derecesi</b> ise geçmişte aynı tarafta ve benzer yüzdeyle seçilenlerin gerçekte ne sıklıkta tuttuğuna bakar: %70 ve üstü yüksek, %60–69 orta, altı düşük.</p>
+    </section>
+    <section>
+      <h2>Günün üst / alt seçimleri</h2>
+      <p class="lead" id="ua-not">Modelin en emin olduğu üst ve alt tarafları. Çizgi olarak oyuncunun sezon maç ortalaması alınır (buçukluya yuvarlanmış); bahis sitelerinin çizgisi elimizde yoktur.</p>
+      <div class="picks" id="ua-picks"><div class="empty">Modelin en emin olduğu üst ve alt seçimleri burada listelenecek.</div></div>
+    </section>
+  </div>
+
+  <div id="view-ust-alt" hidden>
+    <section>
+      <h2>Üst mü, alt mı</h2>
+      <p class="lead">Oyuncuyu ve istatistiği seç, baremi yaz, sonra Kontrol et'e bas. Model o oyuncunun bu geceki maçı için bareme bakar; üst mü alt mı olduğunu ve güven yüzdesini söyler. Tahmin, oyuncu oynarsa geçerlidir.</p>
+      <div class="form">
+        <label>Oyuncu<input id="ua-oyuncu" list="ua-liste" placeholder="LeBron James" autocomplete="off"></label>
+        <label>İstatistik<select id="ua-ist"></select></label>
+        <label>Barem<input id="ua-cizgi" type="text" inputmode="decimal" autocomplete="off" placeholder="13,5"></label>
+        <button id="ua-kontrol" type="button" style="align-self:end">Kontrol et</button>
+      </div>
+      <datalist id="ua-liste"></datalist>
+      <div id="ua-sonuc"><div class="empty">Tahminler yüklenince oyuncu seçebilirsin.</div></div>
+      <p class="lead">Geçmiş maçlarda barem olarak oyuncunun sezon ortalaması alındığında, modelin daha olası bulduğu taraf maçların yaklaşık %59'unda tuttu; modelin en az %70 emin olduğu durumlarda %72. Bahis sitelerinin baremleri bu modelin bilmediği bilgileri de içerir; onlara karşı aynı isabet beklenmemeli.</p>
+    </section>
+  </div>
+
+  <div id="view-gecmis" hidden>
+    <section>
+      <h2>Model ne kadar isabetli</h2>
+      <p class="lead">İlk iki kutu, geçmiş günlerin üst ve alt seçimlerinden kaçının tuttuğunu gösterir. Diğer kutular modelin tahmin hatasını, oyuncunun o güne kadarki sezon ortalamasını tahmin saymakla karşılaştırır; artı değer, modelin o kadar daha az şaştığını gösterir.</p>
+      <div class="tiles" id="tiles"><div class="empty">Özet bekleniyor…</div></div>
+    </section>
+    <section>
+      <h2>Geçmiş günler</h2>
+      <p class="lead">Her gün için, o gün Bugün sekmesinde yer alan üst / alt seçimleri ve maçlar bittikten sonraki sonuçları: gerçekleşen değer ve seçimin tutup tutmadığı. Oyuncu maçta oynamadıysa seçim sayılmaz. “Geriye dönük” günler, sistem kurulmadan önceki maçlar için yalnızca o günden önceki veriyle sonradan üretilmiş seçimlerdir.</p>
+      <div id="days" style="display:flex;flex-direction:column;gap:8px"><div class="empty">Geçmiş günler burada listelenecek.</div></div>
+    </section>
+  </div>
+</main>
+
+<footer><div class="wrap">
+  <p>Tahminler istatistiksel bir modelin çıktısıdır; kesinlik taşımaz.</p>
+  <p>Sistem kendiliğinden çalışır: her sabah günün ön tahminlerini üretir, maçlardan önce sakatlık ve ilk beş bilgisiyle yeniler, ertesi gün sonuçları işler. Sayfa açıkken birkaç dakikada bir kendini yeniler. <a href="https://github.com/kutlu53/nba-tahmin">Kaynak kod</a></p>
+</div></footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const IST = { sayi: "Sayı", ribaund: "Ribaund", asist: "Asist", ucluk: "Üçlük", top_calma: "Top çalma", blok: "Blok", top_kaybi: "Top kaybı" };
+const fmt = (n, d = 1) => (n == null || isNaN(n)) ? "–" : Number(n).toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const saat = iso => { try { return new Date(iso).toLocaleString("tr-TR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } };
+const gunAdi = t => { try { return new Date(t + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "short" }); } catch (e) { return t; } };
+
+/* Sekmeler */
+const VIEWS = ["bugun", "ust-alt", "gecmis"];
+function route() {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "bugun";
+  for (const k of VIEWS) {
+    $("view-" + k).hidden = k !== v;
+    if (k === v) $("tab-" + k).setAttribute("aria-current", "page"); else $("tab-" + k).removeAttribute("aria-current");
+  }
+}
+addEventListener("hashchange", route); route();
+
+/* Üst / Alt: tahmin (ortalama) ve standart sapmadan sayım dağılımı; varyans ortalamadan büyükse negatif binom, değilse Poisson */
+const BIRLESIK = { "sayi+ribaund+asist": "Sayı + Ribaund + Asist", "sayi+ribaund": "Sayı + Ribaund", "sayi+asist": "Sayı + Asist", "ribaund+asist": "Ribaund + Asist" };
+let OYUNCULAR = new Map(), UA_GECMIS = null;
+function ustOlasiligi(mu, sd, cizgi) {
+  if (!(mu > 0)) return 0;
+  const v = sd * sd; let pmf, adim;
+  if (v > mu * 1.0001) { const r = mu * mu / (v - mu), q = mu / (r + mu); pmf = Math.pow(1 - q, r); adim = i => (i + r) / (i + 1) * q; }
+  else { pmf = Math.exp(-mu); adim = i => mu / (i + 1); }
+  let cdf = 0; for (let i = 0; i <= Math.floor(cizgi); i++) { cdf += pmf; pmf *= adim(i); }
+  return Math.max(0, Math.min(1, 1 - cdf));
+}
+const degerler = (o, ist) => ist in BIRLESIK ? (o.b?.[ist] || null) : (o.sp && o[ist] != null ? [o[ist], o.sp[ist]] : null);
+/* Ad araması: büyük-küçük harf ve aksan farkını yok sayar; tam ad bulunamazsa adın bir parçası tek oyuncuya uyuyorsa onu alır */
+const sade = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ı/g, "i").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+function oyuncuBul(yazi) {
+  const a = sade(yazi); if (!a) return null;
+  if (OYUNCULAR.has(a)) return OYUNCULAR.get(a);
+  const uyan = [...OYUNCULAR.entries()].filter(([k]) => k.includes(a));
+  return uyan.length === 1 ? uyan[0][1] : null;
+}
+let UA_SONUC_ACIK = false;      /* ekranda bir sonuç varsa veri yenilendiğinde silinmez, yeniden hesaplanır */
+function hesapla(kontrol) {
+  const out = $("ua-sonuc"); out.replaceChildren(); UA_SONUC_ACIK = false;
+  const bos = m => out.append(el("div", "empty", m));
+  if (!OYUNCULAR.size) return bos(kontrol ? "Tahminler henüz yüklenmedi. Birkaç saniye sonra yeniden dene." : "Tahminler yüklenince oyuncu seçebilirsin.");
+  const yazi = $("ua-oyuncu").value.trim(), kayit = oyuncuBul(yazi);
+  if (!kayit) return bos(!kontrol || !yazi ? "Listeden bir oyuncu seç. Yalnızca bu gece tahmini olan oyuncular listelenir."
+    : "“" + yazi + "” bu gecenin tahmin listesinde bulunamadı. Adı listeden seç; oyuncunun bu gece maçı yoksa ya da oynaması beklenmiyorsa listede yer almaz.");
+  const ist = $("ua-ist").value, d = degerler(kayit.o, ist);
+  if (!d) return bos("Bu oyuncu için bu istatistikte hesap yapılamıyor.");
+  if (!kontrol) return bos("Baremi yaz ve Kontrol et'e bas.");
+  const cizgi = parseFloat($("ua-cizgi").value.trim().replace(",", "."));
+  if (isNaN(cizgi) || cizgi < 0) return bos("Barem için bir sayı yaz, örneğin 13,5.");
+  UA_SONUC_ACIK = true;
+  const p = ustOlasiligi(d[0], d[1], cizgi), alt = Math.max(0, d[0] - 1.2816 * d[1]), ust = d[0] + 1.2816 * d[1];
+  const c = el("div", "ou");
+  c.append(el("div", "who", kayit.o.isim + " · " + (IST[ist] || BIRLESIK[ist]) + " · barem " + fmt(cizgi)), el("div", "sub", (kayit.o.takim || "") + " · " + kayit.mac + " · bu geceki maç"));
+  const ustMu = p >= 0.5, guven = Math.round(100 * (ustMu ? p : 1 - p));
+  const sides = el("div", "sides");
+  for (const [ad, deger, kazanan] of [["Üst", p, ustMu], ["Alt", 1 - p, !ustMu]]) {
+    const s = el("div", "side" + (kazanan ? " win" : "")); s.append(el("small", null, kazanan ? ad + " · güven" : ad), el("span", "num", "%" + fmt(100 * deger, 0))); sides.append(s);
+  }
+  const split = el("div", "split"), bar = el("i"); bar.style.width = (100 * p) + "%"; split.append(bar);
+  const bant = (UA_GECMIS?.bantlar || []).find(b => b.taraf === (ustMu ? "ust" : "alt") && guven >= b.alt && guven <= b.ust && b.secim >= 15);
+  const yorum = (ustMu ? "ÜST" : "ALT") + ", güven %" + guven + "."
+    + (guven < 55 ? " İki taraf neredeyse eşit; bu, yazı turaya yakın bir sonuç." : "")
+    + (bant ? " Geçmişte bu tarafta ve benzer güvenle seçilenlerin %" + Math.round(100 * bant.tutan / bant.secim) + " kadarı tuttu." : "");
+  c.append(sides, split, el("div", null, yorum),
+           el("div", "sub", "Tahmin " + fmt(d[0]) + " · beklenen aralık " + fmt(alt) + " – " + fmt(ust) + " · veri sağlamlığı " + kayit.o.guven + (kayit.o.not ? " · " + kayit.o.not : "")));
+  out.append(c);
+}
+function oyunculariDoldur(g) {
+  OYUNCULAR = new Map(); const dl = $("ua-liste"); dl.replaceChildren();
+  const acikti = UA_SONUC_ACIK;
+  for (const m of g.maclar) for (const o of m.oyuncular) { OYUNCULAR.set(sade(o.isim), { o, mac: m.mac }); const op = el("option"); op.value = o.isim; dl.append(op); }
+  hesapla(acikti);
+}
+for (const [k, ad] of [...Object.entries(IST), ...Object.entries(BIRLESIK)]) { const op = el("option", null, ad); op.value = k; $("ua-ist").append(op); }
+$("ua-oyuncu").addEventListener("input", () => hesapla(false));
+$("ua-ist").addEventListener("change", () => hesapla(false));
+$("ua-cizgi").addEventListener("input", () => hesapla(false));
+$("ua-cizgi").addEventListener("keydown", e => { if (e.key === "Enter") hesapla(true); });
+$("ua-oyuncu").addEventListener("keydown", e => { if (e.key === "Enter") hesapla(true); });
+$("ua-kontrol").addEventListener("click", () => hesapla(true));
+
+/* Günün üst / alt seçimleri: çizgi (sezon ortalaması), taraf ve modelin olasılığı */
+const UA_AD = { sayi: "Sayı", ribaund: "Ribaund", asist: "Asist", ucluk: "Üçlük", "sayi+ribaund+asist": "S + R + A" };
+function uaCard(p) {
+  const ust = p.taraf === "ust", c = el("div", "pick");
+  c.append(el("div", "who", p.oyuncu));
+  const v = el("div", "val"); v.append(el("span", "num", "%" + p.olasilik), el("small", null, "güven")); c.append(v);
+  c.append(el("div", "sub", (p.takim || "") + " · " + p.mac));
+  const ad = UA_AD[p.ist] || p.ist, call = el("div", "call");
+  call.append(el("span", "chip" + (ust ? " hot" : ""), ust ? "ÜST" : "ALT"), el("span", null, fmt(p.cizgi) + " " + (p.ist.includes("+") ? ad : ad.toLocaleLowerCase("tr")))); c.append(call);
+  const sp = el("div", "split"), bar = el("i"); sp.style.gridColumn = "1 / -1"; bar.style.width = p.olasilik + "%"; sp.append(bar); c.append(sp);
+  const f = el("div", "foot");
+  if ("tuttu" in p) {      /* geçmiş gün: sonuç */
+    const [cls, yazi] = p.tuttu === 1 ? ["good", "tuttu"] : p.tuttu === 0 ? ["bad", "tutmadı"] : p.bitti ? ["", "oynamadı, sayılmaz"] : ["hot", "sonuç bekleniyor"];
+    f.append(el("span", null, "Model tahmini " + fmt(p.tahmin) + (p.gercek != null ? " · gerçekleşen " + fmt(p.gercek, 0) : "")), el("span", "chip " + cls, yazi));
+  } else {
+    const olcu = p.gecmis_oran ?? p.olasilik, derece = olcu >= 70 ? "yüksek" : olcu >= 60 ? "orta" : "düşük";
+    f.append(el("span", null, "Model tahmini " + fmt(p.tahmin) + (p.gecmis_oran != null ? " · benzerleri geçmişte %" + p.gecmis_oran + " tuttu" : "")),
+             el("span", "chip " + (derece === "yüksek" ? "good" : derece === "orta" ? "hot" : ""), "güven derecesi: " + derece));
+  }
+  c.append(f);
+  return c;
+}
+function uaNot(o) {
+  const g = o.ust_alt_gecmis; UA_GECMIS = g || null; if (!g || !(g.ust[0] + g.alt[0])) return;
+  const pay = x => x[0] ? x[1] + " / " + x[0] + " (%" + fmt(100 * x[1] / x[0], 0) + ")" : "–";
+  $("ua-not").textContent = "Modelin en emin olduğu üst ve alt tarafları. Çizgi olarak oyuncunun sezon maç ortalaması alınır (buçukluya yuvarlanmış); bahis sitelerinin çizgisi elimizde yoktur. "
+    + "Geçmiş " + g.gun + " günde aynı kuralla seçilen üstlerin " + pay(g.ust) + ", altların " + pay(g.alt) + " kadarı tuttu.";
+}
+
+function renderToday(g) {
+  oyunculariDoldur(g);
+  const ua = $("ua-picks"); ua.replaceChildren();
+  if (!(g.ust_alt || []).length) ua.append(el("div", "empty", "Bugün için yeterince emin olunan üst / alt seçimi yok."));
+  /* Sıra: önce güven derecesi yüksek olanlar (geçmişteki tutma oranı), eşitlikte güven yüzdesi büyük olan */
+  const sirali = [...(g.ust_alt || [])].sort((a, b) => ((b.gecmis_oran ?? b.olasilik) - (a.gecmis_oran ?? a.olasilik)) || (b.olasilik - a.olasilik));
+  for (const p of sirali) ua.append(uaCard(p));
+  const meta = $("meta"); meta.replaceChildren();
+  const add = (k, v) => { const s = el("span"); s.append(k + " ", el("b", null, v)); meta.append(s); };
+  add("Maç günü", gunAdi(g.tarih)); add("Maç", String(g.maclar.length)); add("Oyuncu", String(g.oyuncu_sayisi)); add("Güncellendi", saat(g.guncelleme));
+}
+
+function renderTiles(o) {
+  const t = $("tiles"); t.replaceChildren();
+  const ua = o.ust_alt_gecmis || {};
+  for (const [ad, x] of [["Üst", ua.ust], ["Alt", ua.alt]]) {
+    if (!x || !x[0]) continue;
+    const k = el("div", "tile"); k.append(el("div", "num", "%" + fmt(100 * x[1] / x[0], 0)), el("small", null, ad + " seçimleri: " + x[0] + " seçimin " + x[1] + " tanesi tuttu")); t.append(k);
+  }
+  for (const k of Object.keys(o.model || {})) {
+    const m = o.model[k], x = el("div", "tile");
+    x.append(el("div", "num", (m.iyilesme > 0 ? "+" : "") + fmt(m.iyilesme) + "%"), el("small", null, IST[k] + ": ortalama hata " + fmt(m.hata, 2) + ", ölçüt " + fmt(m.olcut, 2)));
+    t.append(x);
+  }
+  if (!t.children.length) t.append(el("div", "empty", "Henüz özet yok."));
+}
+
+function renderDays(docs) {
+  const box = $("days");
+  const acik = new Set([...box.querySelectorAll("details[open]")].map(d => d.dataset.tarih));      /* yenilemede açık günler açık kalır */
+  box.replaceChildren();
+  if (!docs.length) { box.append(el("div", "empty", "Henüz sonuçlanmış gün yok.")); return; }
+  for (const g of docs) {
+    const d = el("details"), s = el("summary");
+    d.dataset.tarih = g.tarih; d.open = acik.has(g.tarih);
+    const secim = g.ust_alt || [], puanli = g.ua_puanli || 0, tutan = g.ua_tutan || 0;
+    s.append(el("span", "t", gunAdi(g.tarih)), el("span", "chip", g.tur === "canli" ? "canlı tahmin" : "geriye dönük"),
+             el("span", "chip " + (puanli && tutan / puanli >= 0.6 ? "good" : ""), puanli ? tutan + " / " + puanli + " tuttu" : "seçim yok"),
+             el("span", "r", g.mac_sayisi + " maç · sayı hatası " + fmt(g.hata?.sayi?.[0], 2) + " (ölçüt " + fmt(g.hata?.sayi?.[1], 2) + ")"));
+    const body = el("div", "scroll"); body.style.padding = "12px";
+    if (secim.length) {
+      const grid = el("div", "picks");
+      for (const p of [...secim].sort((a, b) => b.olasilik - a.olasilik)) grid.append(uaCard(p));
+      body.append(grid);
+    } else body.append(el("div", "empty", "Bu gün için yeterince emin olunan üst / alt seçimi yoktu."));
+    d.append(s, body); box.append(d);
+  }
+}
+
+/* Veri: sistemin her çalıştırmasında yeniden yazılan veri.json dosyasından okunur ve sayfa açıkken düzenli yenilenir */
+const YENILEME_MS = 5 * 60 * 1000;
+let SON = null, SON_METIN = "";
+function ciz(v) {
+  if (v.ozet) { renderTiles(v.ozet); uaNot(v.ozet); }
+  if (v.gun) renderToday(v.gun); else $("meta").textContent = "Şu an gösterilecek tahmin yok. Günün tahminleri sabah saatlerinde yayımlanır.";
+  renderDays(v.gecmis || []);
+}
+async function yukle() {
+  try {
+    const yanit = await fetch("veri.json?t=" + Date.now(), { cache: "no-store" });
+    if (!yanit.ok) throw new Error("HTTP " + yanit.status);
+    const metin = await yanit.text();
+    if (metin === SON_METIN) return;
+    const v = JSON.parse(metin);
+    SON = v; SON_METIN = metin; ciz(v);
+  } catch (e) {
+    if (!SON) $("meta").textContent = "Veriler yüklenemedi. Bağlantını denetleyip sayfayı biraz sonra yenile.";
+  }
+}
+yukle();
+setInterval(yukle, YENILEME_MS);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) yukle(); });
+</script>
+</body>
+</html>

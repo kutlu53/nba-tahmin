@@ -132,6 +132,9 @@ class KomutTesti(unittest.TestCase):
         with contextlib.redirect_stdout(cikti):
             kod = bulut.main(["karar", "mac_oncesi"])
         self.assertEqual((kod, cikti.getvalue()), (0, "kip=mac_oncesi\ngerekce=elle seçildi\n"))
+        with contextlib.redirect_stdout(io.StringIO()) as cikti:
+            self.assertEqual(bulut.main(["karar", "sayfa"]), 0)
+        self.assertEqual(cikti.getvalue().splitlines()[0], "kip=sayfa")
 
     def test_bilinmeyen_komut(self):
         import contextlib
