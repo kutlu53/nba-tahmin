@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Veritabanını indir
         run: |
@@ -57,13 +57,13 @@ jobs:
           python3 bulut.py karar "$ISTENEN" | tee -a "$GITHUB_OUTPUT"
           grep -E '^(kip|gerekce)=' "$GITHUB_OUTPUT" | sed 's/^kip=/Seçilen akış: /; s/^gerekce=/Gerekçe: /; s/$/  /' >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: steps.karar.outputs.kip != 'yok'
         with:
           python-version: "3.14"
           cache: pip
 
-      - uses: actions/setup-java@v4      # resmi sakatlık raporu (nbainjuries) Java ister
+      - uses: actions/setup-java@v6      # resmi sakatlık raporu (nbainjuries) Java ister
         if: steps.karar.outputs.kip != 'yok'
         with:
           distribution: temurin
@@ -116,7 +116,7 @@ jobs:
         if: always() && steps.karar.outputs.kip != 'yok' && steps.karar.outputs.kip != ''
         run: python akis_ozeti.py >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always() && steps.karar.outputs.kip != 'yok' && steps.karar.outputs.kip != ''
         with:
           name: akis-${{ steps.karar.outputs.kip }}-${{ github.run_number }}
