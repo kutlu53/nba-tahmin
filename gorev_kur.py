@@ -9,7 +9,7 @@ Kurulan görevler (saatler config.py içinden; bilgisayarın yerel saati, yani T
     NBA-MacOncesi    her gün config.MAC_ONCESI_SAATI   mac_oncesi.py                sakatlık, oran, hakem, ilk beş; kesin tahmin
     NBA-MacYaklasan  config.YAKLASAN_ARALIK_DK dakikada bir   mac_oncesi.py --yaklasan N   yalnızca N dakika içinde başlayacak maçlar
     NBA-Haftalik     config.HAFTALIK_GUN günleri config.HAFTALIK_SAATI   haftalik.py       haftalık rapor ve etken katkı testi
-    NBA-TakipGonder  her gün config.TAKIP_GONDER_SAATI takip_gonder.py              takip verisini çekip GitHub deposuna gönderir
+    NBA-TakipGonder  config.TAKIP_GONDER_ARALIK_DK dakikada bir  takip_gonder.py    eksik takip verisini çekip GitHub deposuna gönderir
 
 Görevler oturum açmış kullanıcının adına, penceresiz (pythonw.exe) çalışır. Bilgisayar o saatte
 kapalıysa ya da oturum açık değilse görev, ilk fırsatta (açılışta / oturum açılınca) çalışır.
@@ -40,8 +40,8 @@ GOREVLER = {
                         f"{config.YAKLASAN_ARALIK_DK} dakikada bir", True),
     "NBA-Haftalik": (HAFTALIK.format(gun=config.HAFTALIK_GUN, saat=config.HAFTALIK_SAATI), "haftalik.py",
                      "NBA tahmin sistemi: haftalık rapor ve etken katkı testi", f"{config.HAFTALIK_GUN} günleri {config.HAFTALIK_SAATI}", False),
-    "NBA-TakipGonder": (GUNLUK.format(saat=config.TAKIP_GONDER_SAATI), "takip_gonder.py", "NBA tahmin sistemi: takip verisini çekip GitHub deposuna gönderir",
-                        f"her gün {config.TAKIP_GONDER_SAATI}", False),
+    "NBA-TakipGonder": (YINELENEN.format(aralik=config.TAKIP_GONDER_ARALIK_DK), "takip_gonder.py",
+                        "NBA tahmin sistemi: eksik takip verisini çekip GitHub deposuna gönderir", f"{config.TAKIP_GONDER_ARALIK_DK} dakikada bir", False),
 }
 PYTHONW = config.KOK / ".venv" / "Scripts" / "pythonw.exe"
 

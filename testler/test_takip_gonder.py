@@ -82,6 +82,67 @@ class DepoyaGonderTesti(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             takip_gonder.depoya_gonder(Path(self.gecici.name) / "olmayan", self.klasor)
 
+    def test_gonderilememis_isleme_sonraki_calistirmada_gonderilir(self):
+        self.dosya("2026-11-22")
+        (self.depo / "takip_verisi").mkdir()
+        (self.depo / "takip_verisi" / "2026-11-22.json").write_text("{}\n", encoding="utf-8", newline="\n")
+        git(self.depo, "add", "--", "takip_verisi")
+        git(self.depo, "commit", "--quiet", "-m", "Takip verisi: 2026-11-22")          # işlendi ama gönderilemedi (ağ kesildi)
+        self.assertTrue(takip_gonder.bekleyen_isleme_var(self.depo))
+        self.assertEqual(takip_gonder.depoya_gonder(self.depo, self.klasor), [])       # yeni dosya yok ...
+        self.assertEqual(self.uzaktaki(), ["README.md", "takip_verisi/2026-11-22.json"])   # ... ama bekleyen işleme gönderildi
+        self.assertFalse(takip_gonder.bekleyen_isleme_var(self.depo))
+
+
+class BekleyenIsTesti(unittest.TestCase):
+    """Yapılacak iş olup olmadığı veritabanından ve depo kopyasından, ağa çıkmadan anlaşılır."""
+
+    def setUp(self):
+        import veritabani
+        self.gecici = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.depo = Path(self.gecici.name)
+        (self.depo / "takip_verisi").mkdir()
+        self.c = veritabani.baglan(":memory:")
+        veritabani.sema_kur(self.c)
+        veritabani.yaz(self.c, "takimlar", [{"takim_id": t, "kisaltma": f"T{t}", "isim": f"Takım {t}"} for t in (1, 2)])
+        veritabani.yaz(self.c, "oyuncular", [{"oyuncu_id": 10, "isim": "Oyuncu", "takim_id": 1, "pozisyon": "PG"}])
+        veritabani.yaz(self.c, "maclar", [
+            {"mac_id": "a", "tarih": "2026-11-22", "ev_takim_id": 1, "dep_takim_id": 2, "durum": "oynandi"},
+            {"mac_id": "b", "tarih": "2026-11-23", "ev_takim_id": 1, "dep_takim_id": 2, "durum": "oynandi"},
+            {"mac_id": "c", "tarih": "2026-11-24", "ev_takim_id": 1, "dep_takim_id": 2, "durum": "oynanacak"}])
+        veritabani.yaz(self.c, "oyuncu_mac", [{"oyuncu_id": 10, "mac_id": mac, "takim_id": 1, "rakip_id": 2, "ev_mi": 1, "ilk_bes": 1, "dakika": 30.0,
+                                                "sayi": 10, "ribaund": 0, "asist": 0, "ucluk": 0, "top_calma": 0, "blok": 0, "top_kaybi": 0} for mac in ("a", "b")])
+        veritabani.yaz(self.c, "takip_mac", [{"oyuncu_id": 10, "mac_id": "a", "olasi_asist": 5, "pas": 40, "ribaund_firsati": 8, "top_dokunusu": 60}])
+
+    def tearDown(self):
+        self.c.close()
+        self.gecici.cleanup()
+
+    def test_eksik_ve_gonderilmemis_gunler(self):
+        import veritabani
+        self.assertEqual(takip_gonder.eksik_gunler(self.c), ["2026-11-23"])                   # oynandı, takip verisi yok
+        self.assertEqual(takip_gonder.gonderilmemis_gunler(self.c, self.depo), ["2026-11-22"])  # verisi var, dosyası depoda yok
+        (self.depo / "takip_verisi" / "2026-11-22.json").write_text("{}\n", encoding="utf-8")
+        self.assertEqual(takip_gonder.gonderilmemis_gunler(self.c, self.depo), [])
+        veritabani.yaz(self.c, "takip_mac", [{"oyuncu_id": 10, "mac_id": "b", "olasi_asist": 3, "pas": 30, "ribaund_firsati": 6, "top_dokunusu": 50}])
+        self.assertEqual(takip_gonder.eksik_gunler(self.c), [])
+        self.assertEqual(takip_gonder.gonderilmemis_gunler(self.c, self.depo), ["2026-11-23"])
+
+    def test_eksik_gun_sorgusu_yukleyiciyle_ayni(self):
+        import inspect
+
+        import yukle
+        duz = lambda metin: " ".join(metin.split())
+        sorgu = duz("""SELECT DISTINCT m.tarih FROM maclar m JOIN oyuncu_mac om USING (mac_id)
+            WHERE m.durum = 'oynandi' AND m.tarih >= ? AND om.dakika > 0
+              AND NOT EXISTS (SELECT 1 FROM takip_mac t JOIN maclar m2 USING (mac_id) WHERE m2.tarih = m.tarih)
+            ORDER BY m.tarih""")
+        self.assertIn(sorgu, duz(inspect.getsource(yukle.takip_verisini_yukle)))
+        self.assertIn(sorgu, duz(inspect.getsource(takip_gonder.eksik_gunler)))
+
+    def test_git_deposu_olmayan_klasorde_bekleyen_isleme_yok_sayilir(self):
+        self.assertFalse(takip_gonder.bekleyen_isleme_var(self.depo))
+
 
 if __name__ == "__main__":
     unittest.main()
