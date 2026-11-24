@@ -1,0 +1,9 @@
+nba.db
+nba.db-*
+nba-onceki.db
+log/
+raporlar/
+site_veri/
+.venv/
+__pycache__/
+*.pyc

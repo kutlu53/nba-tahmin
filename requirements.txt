@@ -1,0 +1,9 @@
+# Python 3.10+ (3.14.2 ile denendi)
+nba_api==1.12.0
+pandas==2.3.3          # nbainjuries pandas 3'ü desteklemiyor; kod 2.3.3 ve 3.1.1 ile aynı sonucu veriyor (23 Kasım 2026)
+requests==2.34.2
+openpyxl>=3.1
+tzdata
+
+# NBA resmi sakatlık raporu (adım 10); Java 8+ ister:
+nbainjuries==1.1.1
