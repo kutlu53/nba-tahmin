@@ -1,0 +1,134 @@
+name: Akış
+
+# NBA tahmin sisteminin kendiliğinden çalışması. 15 dakikada bir tetiklenir; hangi akışın sırası geldiğine
+# bulut.py karar verir (sabah, haftalık, maç öncesi, yaklaşan maç ya da hiçbiri). Yapılacak iş yoksa
+# çalıştırma birkaç saniyede biter.
+#
+# Veritabanı (nba.db) depoda değil, "veri" adlı sürümün (release) ekinde durur: her çalıştırma onu indirir,
+# iş bitince yerine yenisini koyar. Aynı anda iki çalıştırma veritabanını ezmesin diye çalıştırmalar sıraya girer.
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+    inputs:
+      kip:
+        description: "Çalıştırılacak akış (otomatik: sırası geleni bulut.py seçer)"
+        type: choice
+        default: otomatik
+        options: [otomatik, sabah, mac_oncesi, yaklasan, haftalik]
+
+permissions:
+  contents: write          # veritabanını sürümün ekine yazmak için
+
+concurrency:
+  group: nba-veritabani
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NBA_VERI_KAYNAGI: cdn    # GitHub'ın makineleri stats.nba.com sorgularına yanıt alamıyor
+  PYTHONUTF8: "1"
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  akis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Veritabanını indir
+        run: |
+          gh release download veri --pattern nba.db --repo "$GITHUB_REPOSITORY" || {
+            echo "::warning::nba.db indirilemedi; bir önceki günün yedeği (nba-onceki.db) kullanılıyor"
+            gh release download veri --pattern nba-onceki.db --repo "$GITHUB_REPOSITORY"
+            mv nba-onceki.db nba.db
+          }
+          ls -l nba.db
+
+      - name: Sırası gelen akışı seç
+        id: karar
+        env:
+          ISTENEN: ${{ inputs.kip || 'otomatik' }}
+        run: |
+          python3 bulut.py karar "$ISTENEN" | tee -a "$GITHUB_OUTPUT"
+          grep -E '^(kip|gerekce)=' "$GITHUB_OUTPUT" | sed 's/^kip=/Seçilen akış: /; s/^gerekce=/Gerekçe: /; s/$/  /' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-python@v5
+        if: steps.karar.outputs.kip != 'yok'
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - uses: actions/setup-java@v4      # resmi sakatlık raporu (nbainjuries) Java ister
+        if: steps.karar.outputs.kip != 'yok'
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Bağımlılıkları kur
+        if: steps.karar.outputs.kip != 'yok'
+        run: pip install -r requirements.txt
+
+      - name: Bir önceki günün yedeğini ayır
+        if: steps.karar.outputs.kip == 'sabah'
+        run: cp nba.db nba-onceki.db
+
+      - name: Akışı çalıştır
+        id: akis
+        if: steps.karar.outputs.kip != 'yok'
+        env:
+          KIP: ${{ steps.karar.outputs.kip }}
+        run: |
+          basla=$SECONDS
+          kod=0
+          case "$KIP" in
+            sabah)      python gunluk.py || kod=$? ;;
+            mac_oncesi) python mac_oncesi.py || kod=$? ;;
+            yaklasan)   python mac_oncesi.py --yaklasan "$(python -c 'import config; print(config.MAC_YAKLASAN_DK)')" || kod=$? ;;
+            haftalik)   python haftalik.py || kod=$?
+                        python bulut.py kaydet haftalik "$kod" "$((SECONDS - basla))" ;;
+            *)          echo "::error::bilinmeyen akış: $KIP"; exit 1 ;;
+          esac
+          echo "kod=$kod" >> "$GITHUB_OUTPUT"
+          echo "$KIP akışının çıkış kodu: $kod (0 tamam, 2 kritik olmayan adım başarısız, 1 kritik adım başarısız)"
+          if [ "$kod" = 2 ]; then echo "::warning::$KIP akışı eksikle tamamlandı: kritik olmayan bir adım başarısız (ayrıntı özet sayfasında)"; fi
+
+      - name: Veritabanını sakla
+        if: always() && steps.karar.outputs.kip != 'yok' && steps.karar.outputs.kip != ''
+        run: |
+          # Yarıda kesilmiş bir yazma varsa SQLite açılışta geri alır; bozuk dosya sürüme konmaz.
+          python3 -c "import sqlite3, sys; s = sqlite3.connect('nba.db').execute('PRAGMA quick_check').fetchone()[0]; print('bütünlük denetimi:', s); sys.exit(s != 'ok')"
+          yukle() {
+            for deneme in 1 2 3; do
+              gh release upload veri "$1" --clobber --repo "$GITHUB_REPOSITORY" && return 0
+              echo "::warning::$1 yüklenemedi ($deneme. deneme)"; sleep 15
+            done
+            return 1
+          }
+          if [ -f nba-onceki.db ]; then yukle nba-onceki.db; fi
+          yukle nba.db
+
+      - name: Adım özeti
+        if: always() && steps.karar.outputs.kip != 'yok' && steps.karar.outputs.kip != ''
+        run: python akis_ozeti.py >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.karar.outputs.kip != 'yok' && steps.karar.outputs.kip != ''
+        with:
+          name: akis-${{ steps.karar.outputs.kip }}-${{ github.run_number }}
+          path: |
+            log/
+            raporlar/
+            site_veri/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Sonuç
+        if: steps.karar.outputs.kip != 'yok'
+        env:
+          KOD: ${{ steps.akis.outputs.kod }}
+        run: test "$KOD" = 0 || test "$KOD" = 2
