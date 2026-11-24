@@ -8,20 +8,21 @@ name: Akış
 # iş bitince yerine yenisini koyar. Aynı anda iki çalıştırma veritabanını ezmesin diye çalıştırmalar sıraya girer.
 #
 # Tahmin üreten her çalıştırmanın sonunda web sayfası (GitHub Pages) yeniden derlenip yayımlanır. Sayfanın kendisi
-# (sayfa/) değişince de yalnızca sayfa yeniden yayımlanır ("sayfa" akışı).
+# (sayfa/) değişince de yalnızca sayfa yeniden yayımlanır ("sayfa" akışı). Bilgisayar depoya yeni takip dosyası
+# gönderince (takip_verisi/) dosyalar veritabanına işlenir ("takip" akışı).
 on:
   schedule:
     - cron: "7,22,37,52 * * * *"
   push:
     branches: [main]
-    paths: ["sayfa/**", "sayfa_derle.py"]
+    paths: ["sayfa/**", "sayfa_derle.py", "takip_verisi/**"]
   workflow_dispatch:
     inputs:
       kip:
-        description: "Çalıştırılacak akış (otomatik: sırası geleni bulut.py seçer; sayfa: yalnızca web sayfasını yeniler)"
+        description: "Çalıştırılacak akış (otomatik: sırası geleni bulut.py seçer; sayfa: yalnızca web sayfasını yeniler; takip: depodaki takip dosyalarını işler)"
         type: choice
         default: otomatik
-        options: [otomatik, sabah, mac_oncesi, yaklasan, haftalik, sayfa]
+        options: [otomatik, sabah, mac_oncesi, yaklasan, haftalik, sayfa, takip]
 
 permissions:
   contents: write          # veritabanını sürümün ekine yazmak için
@@ -60,8 +61,15 @@ jobs:
       - name: Sırası gelen akışı seç
         id: karar
         env:
-          ISTENEN: ${{ github.event_name == 'push' && 'sayfa' || inputs.kip || 'otomatik' }}
+          ISTENEN: ${{ inputs.kip || 'otomatik' }}
+          OLAY: ${{ github.event_name }}
+          ONCEKI: ${{ github.event.before }}
         run: |
+          if [ "$OLAY" = push ]; then
+            # Gönderimde takip dosyası geldiyse veritabanına işlenir; yalnızca sayfa değiştiyse sayfa yenilenir.
+            degisen=$(gh api "repos/$GITHUB_REPOSITORY/compare/$ONCEKI...$GITHUB_SHA" --jq '.files[].filename' || true)
+            if grep -q '^takip_verisi/' <<< "$degisen"; then ISTENEN=takip; else ISTENEN=sayfa; fi
+          fi
           python3 bulut.py karar "$ISTENEN" | tee -a "$GITHUB_OUTPUT"
           grep -E '^(kip|gerekce)=' "$GITHUB_OUTPUT" | sed 's/^kip=/Seçilen akış: /; s/^gerekce=/Gerekçe: /; s/$/  /' >> "$GITHUB_STEP_SUMMARY"
 
@@ -72,7 +80,7 @@ jobs:
           cache: pip
 
       - uses: actions/setup-java@v6      # resmi sakatlık raporu (nbainjuries) Java ister
-        if: steps.karar.outputs.kip != 'yok' && steps.karar.outputs.kip != 'sayfa' && steps.karar.outputs.kip != 'haftalik'
+        if: contains(fromJSON('["sabah", "mac_oncesi", "yaklasan"]'), steps.karar.outputs.kip)
         with:
           distribution: temurin
           java-version: "21"
@@ -100,6 +108,8 @@ jobs:
             haftalik)   python haftalik.py || kod=$?
                         python bulut.py kaydet haftalik "$kod" "$((SECONDS - basla))" ;;
             sayfa)      python site_veri.py || kod=$? ;;      # veritabanını değiştirmez; yalnızca sayfa verisini yeniden üretir
+            takip)      python yukle.py takip || kod=$?        # depodaki yeni takip dosyalarını veritabanına işler
+                        python site_veri.py || kod=$? ;;
             *)          echo "::error::bilinmeyen akış: $KIP"; exit 1 ;;
           esac
           echo "kod=$kod" >> "$GITHUB_OUTPUT"

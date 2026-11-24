@@ -13,9 +13,10 @@ tetiklemenin işini sonraki tetikleme yapar. Saatler bilgisayardakiyle aynıdır
 
 Tamamlanamayan sabah ve akşam akışı günde en çok DENEME_SINIRI kez denenir.
 
-    python bulut.py karar [otomatik|sabah|mac_oncesi|yaklasan|haftalik|sayfa]   "kip=..." ve "gerekce=..." satırlarını yazar
-                                                                          (sayfa yalnızca elle seçilir: veri toplamadan
-                                                                          sayfa verisini yeniden üretip sayfayı yayımlar)
+    python bulut.py karar [otomatik|sabah|mac_oncesi|yaklasan|haftalik|sayfa|takip]   "kip=..." ve "gerekce=..." satırlarını yazar
+        sayfa ve takip zamanla seçilmez; elle ya da depoya gönderimle başlar:
+        sayfa   veri toplamadan sayfa verisini yeniden üretip sayfayı yayımlar
+        takip   depoya yeni gelen takip dosyalarını veritabanına işler (bilgisayar gönderir: takip_gonder.py)
     python bulut.py kaydet haftalik <çıkış kodu> <süre sn>                haftalik.py sonucunu calisma_kaydi tablosuna yazar
 
 Yalnızca standart kitaplığı kullanır: iş akışında bağımlılıklar kurulmadan önce çalışır.
@@ -31,7 +32,7 @@ import veritabani
 TR = ZoneInfo("Europe/Istanbul")          # config.py'deki çalıştırma saatleri Türkiye saatidir
 GUN_ADLARI = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 KIPLER = ("sabah", "haftalik", "mac_oncesi", "yaklasan", "yok")
-ELLE_SECILEBILEN = ("otomatik",) + KIPLER[:-1] + ("sayfa",)
+ELLE_SECILEBILEN = ("otomatik",) + KIPLER[:-1] + ("sayfa", "takip")
 DENEME_SINIRI = 3
 
 

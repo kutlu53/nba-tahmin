@@ -32,8 +32,9 @@ sayfasında görünür.
 - Sakatlıklar: NBA'in resmi sakatlık raporu ve ESPN
 - Kadro, pozisyon ve bahis çizgileri: ESPN
 - Takip verisi (olası asist, ribaund fırsatı): yalnızca stats.nba.com sorgularından alınabiliyor ve bu sorgular
-  GitHub'ın makinelerine yanıt vermiyor. Bu veriyi ayrı bir bilgisayar çekip `takip_verisi/` klasörüne günlük dosyalar
-  olarak gönderir (`takip_aktar.py`). Bir günün dosyası gelmemişse o gün atlanır, geldiğinde işlenir.
+  GitHub'ın makinelerine yanıt vermiyor. Bu veriyi ayrı bir bilgisayar her gün 19:00'da çekip `takip_verisi/` klasörüne
+  günlük dosyalar olarak gönderir (`takip_gonder.py`); gönderim gelince `Akış` dosyaları veritabanına işler ("takip"
+  akışı). Bir günün dosyası gelmemişse o gün atlanır, geldiğinde işlenir.
 
 ## Elle çalıştırma
 

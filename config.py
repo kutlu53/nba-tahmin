@@ -207,6 +207,7 @@ MAC_ONCESI_SAATI = "20:30"            # mac_oncesi.py: sakatlık, oran, hakem ve
 YAKLASAN_ARALIK_DK = 15               # mac_oncesi.py --yaklasan: bu aralıkla çalışır ...
 MAC_YAKLASAN_DK = 40                  # ... ve bu kadar dakika içinde başlayacak maçları kesin ilk beşle yeniler
 GOREV_UYANDIR = False                 # True: yaklaşan maç görevi bilgisayarı uykudan uyandırır
+TAKIP_GONDER_SAATI = "19:00"          # takip_gonder.py: önceki gecenin takip verisini çekip GitHub deposuna gönderir (ABD doğu 11:00 / 12:00)
 HAFTALIK_GUN = "Monday"               # haftalik.py: haftalık rapor ve etken katkı testi
 HAFTALIK_SAATI = "11:00"
 
