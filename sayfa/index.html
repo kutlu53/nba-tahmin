@@ -88,9 +88,13 @@ button { font: 600 14px var(--body); color: var(--surface); background: var(--in
 .split i { display: block; height: 100%; background: var(--accent); }
 
 /* Çalıştır */
-.btn { display: inline-block; font: 600 14px var(--body); color: var(--surface); background: var(--ink); border-radius: 6px; padding: 10px 16px; text-decoration: none; }
-.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.flows { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; } .flows b { color: var(--ink); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+button.alt { background: var(--chip); color: var(--ink); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.note-box { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 4px; padding: 10px 14px; max-width: 72ch; overflow-wrap: anywhere; }
+.note-box a, .lead a { color: inherit; }
+.stack { display: flex; flex-direction: column; gap: 12px; } .stack[hidden] { display: none; }
+.flows { padding-left: 20px; margin: 0; display: flex; flex-direction: column; gap: 6px; } .flows b { color: var(--ink); }
 
 footer { border-top: 1px solid var(--line); padding-block: 16px calc(28px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 13px; }
 footer p { margin: 0 0 4px; max-width: 78ch; }
@@ -154,18 +158,38 @@ footer a { color: inherit; }
 
   <div id="view-calistir" hidden>
     <section>
-      <h2>Hesaplamayı elle başlat</h2>
-      <p class="lead">Hesaplama GitHub'da çalışır. Aşağıdaki bağlantı deponun Actions sayfasını açar; orada <b>Run workflow</b> düğmesine basıp bir akış seçer, yeşil <b>Run workflow</b> düğmesiyle başlatırsın. Düğmeyi yalnızca GitHub'a giriş yapmış depo sahibi görür. Çalıştırma birkaç dakika sürer; bitince bu sayfa kendiliğinden yenilenir.</p>
-      <div><a class="btn" href="https://github.com/kutlu53/nba-tahmin/actions/workflows/akis.yml" target="_blank" rel="noopener">GitHub'da çalıştır</a></div>
+      <h2>Hesaplamayı başlat</h2>
+      <p class="lead">Hesaplama GitHub'da çalışır ve birkaç dakika sürer; bitince bu sayfa kendiliğinden yenilenir.</p>
+      <div class="actions">
+        <button id="btn-mac_oncesi" data-kip="mac_oncesi" type="button" disabled>Tahminleri yenile</button>
+        <button id="btn-sabah" data-kip="sabah" type="button" class="alt" disabled>Sabah akışını çalıştır</button>
+      </div>
+      <div class="note-box" id="run-note" role="status">Düğmeleri kullanmak için aşağıdan erişim anahtarını kaydet.</div>
+      <ul class="lead flows">
+        <li><b>Tahminleri yenile</b>: sakatlıklar, oranlar ve ilk beşler yeniden çekilir; henüz başlamamış maçların tahminleri ve günün seçimleri yenilenir. 20:30'dan önce basarsan o günün akşam çalıştırması yapılmış sayılır; maçlardan 40 dakika önceki yenilemeler yine yapılır.</li>
+        <li><b>Sabah akışını çalıştır</b>: önceki günün sonuçlarını işler ve günün ilk tahminlerini üretir.</li>
+      </ul>
     </section>
     <section>
-      <h2>Hangi akışı seçmeli</h2>
-      <ul class="lead flows">
-        <li><b>mac_oncesi</b>: tahminleri şimdi yeniler. Sakatlıklar, oranlar ve ilk beşler yeniden çekilir; henüz başlamamış maçların tahminleri ve günün seçimleri yenilenir.</li>
-        <li><b>sabah</b>: önceki günün sonuçlarını işler ve günün ilk tahminlerini üretir.</li>
-        <li><b>otomatik</b>: sırası gelen işi sistem seçer; sırası gelen iş yoksa hiçbir şey yapmaz.</li>
-      </ul>
-      <p class="lead">mac_oncesi akışını 20:30'dan önce elle çalıştırırsan o günün akşam çalıştırması yapılmış sayılır; maçlardan 40 dakika önceki yenilemeler yine yapılır.</p>
+      <h2>Erişim anahtarı</h2>
+      <div id="anahtar-yok" class="stack">
+        <p class="lead">Düğmeler GitHub'da yalnızca bu depoya yetkili bir erişim anahtarıyla çalışır. Anahtar bu sayfanın kodunda durmaz; yalnızca bu cihazdaki tarayıcıda saklanır ve GitHub dışında hiçbir yere gönderilmez. Her cihazda bir kez girilir.</p>
+        <ol class="lead flows">
+          <li>GitHub'a giriş yap ve <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">yeni erişim anahtarı sayfasını</a> aç (Settings → Developer settings → Fine-grained tokens → Generate new token).</li>
+          <li><b>Repository access</b>: “Only select repositories” seç, listeden <b>nba-tahmin</b> deposunu işaretle.</li>
+          <li><b>Permissions → Repository permissions → Actions</b>: “Read and write” seç. Başka izin verme.</li>
+          <li>“Generate token” ile üret, çıkan anahtarı kopyala, aşağıya yapıştır ve Kaydet'e bas.</li>
+        </ol>
+        <div class="form">
+          <label>Erişim anahtarı<input id="anahtar" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_…"></label>
+          <button id="anahtar-kaydet" type="button" style="align-self:end">Kaydet</button>
+        </div>
+      </div>
+      <div id="anahtar-var" class="stack" hidden>
+        <p class="lead" id="anahtar-bilgi"></p>
+        <div class="actions"><button id="anahtar-sil" type="button" class="alt">Anahtarı bu cihazdan sil</button></div>
+      </div>
+      <p class="lead">Anahtarsız yol: <a href="https://github.com/kutlu53/nba-tahmin/actions/workflows/akis.yml" target="_blank" rel="noopener">deponun Actions sayfasında</a> “Run workflow” düğmesiyle de başlatabilirsin.</p>
     </section>
   </div>
 </main>
@@ -364,6 +388,80 @@ async function yukle() {
 }
 yukle();
 setInterval(yukle, YENILEME_MS);
+
+/* Çalıştır: akışı GitHub API üzerinden başlatır. Erişim anahtarı sayfanın kodunda değil, yalnızca bu tarayıcıda (localStorage) durur. */
+const API = "https://api.github.com/repos/kutlu53/nba-tahmin/actions/workflows/akis.yml";
+const ANAHTAR_ADI = "nba-tahmin-anahtar", AKIS_ADI = { mac_oncesi: "Tahminleri yenile", sabah: "Sabah akışı" };
+const IZLEME_ARALIK_MS = 8000, IZLEME_SINIR_MS = 20 * 60 * 1000;
+let ANAHTAR = "", MESGUL = false;
+try { ANAHTAR = localStorage.getItem(ANAHTAR_ADI) || ""; } catch (e) {}
+function anahtarSakla(v) {      /* tarayıcı saklamaya izin vermiyorsa (gizli pencere) anahtar yalnızca sayfa açıkken kalır */
+  ANAHTAR = v;
+  try { if (v) localStorage.setItem(ANAHTAR_ADI, v); else localStorage.removeItem(ANAHTAR_ADI); return true; } catch (e) { return false; }
+}
+const github = (yol, secenek = {}) => fetch(API + yol, { ...secenek, cache: "no-store",
+  headers: { Accept: "application/vnd.github+json", Authorization: "Bearer " + ANAHTAR, "X-GitHub-Api-Version": "2022-11-28", ...(secenek.body ? { "Content-Type": "application/json" } : {}) } });
+function notYaz(metin, baglanti) {
+  const n = $("run-note"); n.replaceChildren(metin);
+  if (baglanti) { const a = el("a", null, "GitHub'da gör"); a.href = baglanti; a.target = "_blank"; a.rel = "noopener"; n.append(" ", a); }
+}
+function calistirCiz() {
+  $("anahtar-yok").hidden = !!ANAHTAR; $("anahtar-var").hidden = !ANAHTAR;
+  if (ANAHTAR) $("anahtar-bilgi").textContent = "Erişim anahtarı bu cihazda kayıtlı (sonu …" + ANAHTAR.slice(-4) + "). Düğmeleri yalnızca bu cihazdan kullanabilirsin.";
+  for (const b of document.querySelectorAll("button[data-kip]")) b.disabled = !ANAHTAR || MESGUL;
+}
+const hataMetni = durum => durum === 401 ? "Anahtar geçersiz ya da süresi dolmuş. Anahtarı silip yenisini kaydet."
+  : durum === 403 || durum === 404 ? "Anahtarın bu depoda akış başlatma yetkisi yok. Anahtarı üretirken nba-tahmin deposunu ve Actions için “Read and write” iznini seçtiğinden emin ol."
+  : "GitHub isteği kabul etmedi (HTTP " + durum + "). Biraz sonra yeniden dene.";
+async function izle(kip, sonId) {      /* başlatılan çalıştırmayı (kimliği sonId'den büyük ilk çalıştırma) bulur ve bitene kadar durumunu yazar */
+  const bitis = Date.now() + IZLEME_SINIR_MS;
+  while (Date.now() < bitis) {
+    await new Promise(r => setTimeout(r, IZLEME_ARALIK_MS));
+    let c = null;
+    try {
+      const y = await github("/runs?event=workflow_dispatch&per_page=10");
+      if (y.ok) c = ((await y.json()).workflow_runs || []).filter(r => r.id > sonId).pop() || null;
+    } catch (e) {}
+    if (!c) continue;
+    if (c.status !== "completed") { notYaz(AKIS_ADI[kip] + ": " + (c.status === "in_progress" ? "çalışıyor…" : "sırada bekliyor…"), c.html_url); continue; }
+    if (c.conclusion === "success") { notYaz(AKIS_ADI[kip] + " tamamlandı. Sayfa yenileniyor.", c.html_url); yukle(); setTimeout(yukle, 30000); setTimeout(yukle, 90000); }
+    else notYaz(AKIS_ADI[kip] + " tamamlanamadı (" + c.conclusion + ").", c.html_url);
+    return;
+  }
+  notYaz(AKIS_ADI[kip] + " başlatıldı ama sonucu buradan izlenemedi.", "https://github.com/kutlu53/nba-tahmin/actions/workflows/akis.yml");
+}
+async function baslat(kip) {
+  if (!ANAHTAR || MESGUL) return;
+  MESGUL = true; calistirCiz(); notYaz(AKIS_ADI[kip] + ": istek gönderiliyor…");
+  try {
+    const once = await github("/runs?per_page=1");      /* en son çalıştırmanın kimliği: bizimki bundan büyük olacak */
+    if (!once.ok) notYaz(hataMetni(once.status));
+    else {
+      const sonId = ((await once.json()).workflow_runs || [])[0]?.id || 0;
+      const y = await github("/dispatches", { method: "POST", body: JSON.stringify({ ref: "main", inputs: { kip } }) });
+      if (y.status >= 200 && y.status < 300) { notYaz(AKIS_ADI[kip] + ": GitHub isteği aldı, çalıştırma başlıyor…"); await izle(kip, sonId); }
+      else notYaz(hataMetni(y.status));
+    }
+  } catch (e) { notYaz("GitHub'a ulaşılamadı. Bağlantını denetleyip yeniden dene."); }
+  MESGUL = false; calistirCiz();
+}
+async function anahtarKaydet() {
+  const v = $("anahtar").value.trim();
+  if (!v) return notYaz("Önce anahtarı kutuya yapıştır.");
+  const onceki = ANAHTAR; ANAHTAR = v; notYaz("Anahtar denetleniyor…");
+  try {
+    const y = await github("");
+    if (!y.ok) { ANAHTAR = onceki; return notYaz(hataMetni(y.status)); }
+  } catch (e) { ANAHTAR = onceki; return notYaz("GitHub'a ulaşılamadı; anahtar denetlenemedi. Bağlantını denetleyip yeniden dene."); }
+  const kalici = anahtarSakla(v); $("anahtar").value = "";
+  notYaz(kalici ? "Anahtar kaydedildi. Artık düğmelere basabilirsin." : "Anahtar yalnızca bu sayfa açıkken geçerli; tarayıcı kalıcı saklamaya izin vermiyor (gizli pencere olabilir).");
+  calistirCiz();
+}
+for (const b of document.querySelectorAll("button[data-kip]")) b.addEventListener("click", () => baslat(b.dataset.kip));
+$("anahtar-kaydet").addEventListener("click", anahtarKaydet);
+$("anahtar").addEventListener("keydown", e => { if (e.key === "Enter") anahtarKaydet(); });
+$("anahtar-sil").addEventListener("click", () => { anahtarSakla(""); notYaz("Anahtar bu cihazdan silindi. GitHub'daki anahtarı tümüyle iptal etmek için GitHub'da Settings → Developer settings altından sil."); calistirCiz(); });
+calistirCiz();
 document.addEventListener("visibilitychange", () => { if (!document.hidden) yukle(); });
 </script>
 </body>
