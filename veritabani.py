@@ -249,6 +249,24 @@ CREATE TABLE IF NOT EXISTS oranlar (
     PRIMARY KEY (mac_id, tur)
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS oyuncu_barem (       -- bahis sitesinin oyuncu baremleri (ESPN üzerinden); günde bir kez, maç öncesi çekilir
+    mac_id          TEXT NOT NULL REFERENCES maclar(mac_id),
+    espn_oyuncu_id  INTEGER NOT NULL,
+    istatistik      TEXT NOT NULL,                -- sayi, ribaund, asist, ucluk ve birleşikleri (sayi+ribaund+asist ...)
+    oyuncu_id       INTEGER REFERENCES oyuncular(oyuncu_id),   -- ESPN kimliği oyuncular tablosunda bulunamadıysa boş
+    tarih           TEXT NOT NULL,                -- maçın tarihi (ABD)
+    cizgi           REAL NOT NULL,                -- çekim anındaki barem
+    acilis_cizgi    REAL,                         -- baremin ilk açıldığı değer
+    oran_1          REAL,                         -- iki tarafın ondalık oranı, beslemedeki sırayla. Hangisinin üst olduğu beslemede yazmaz;
+    oran_2          REAL,                         -- sıra üst, alt görünüyor (25 Kasım 2026: bir tarafı belirgin favori 217 baremin 165'i bununla tutarlı)
+    acilis_oran_1   REAL,
+    acilis_oran_2   REAL,
+    saglayici       TEXT,
+    guncelleme      TEXT,                         -- ESPN'in 'lastUpdated' alanı, geldiği gibi
+    cekim_zamani    TEXT NOT NULL,
+    PRIMARY KEY (mac_id, espn_oyuncu_id, istatistik)
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS onsuz_etkisi (
     oyuncu_id      INTEGER NOT NULL REFERENCES oyuncular(oyuncu_id),
     arkadas_id     INTEGER NOT NULL REFERENCES oyuncular(oyuncu_id),   -- önemli takım arkadaşı
@@ -306,6 +324,7 @@ ANAHTARLAR = {
     "tahmin_etken": ("tahmin_id", "etken"),
     "onsuz_etkisi": ("oyuncu_id", "arkadas_id", "istatistik"),
     "oranlar": ("mac_id", "tur"),
+    "oyuncu_barem": ("mac_id", "espn_oyuncu_id", "istatistik"),
     "takip_mac": ("oyuncu_id", "mac_id"),
     "salonlar": ("sehir",),
     "hakemler": ("hakem_id",),

@@ -136,6 +136,75 @@ def mac_orani(espn_mac_id):
     return _oran_ayristir(ogeler[0] if ogeler else None)
 
 
+# Oyuncu baremleri: ESPN'in maç oranı kaydının altındaki "propBets" beslemesi (bahis sitesinin çizgileri; 25 Kasım 2026'da
+# DraftKings). Yalnızca oyuncu başına tek baremli üst / alt pazarları alınır; "Milestones" (10+, 15+ ...) pazarları alınmaz.
+BAREM_PAZARLARI = {
+    "Total Points": "sayi", "Total Rebounds": "ribaund", "Total Assists": "asist", "Total 3-Point Field Goals": "ucluk",
+    "Total Points, Rebounds, and Assists": "sayi+ribaund+asist", "Total Points and Rebounds": "sayi+ribaund",
+    "Total Points and Assists": "sayi+asist", "Total Assists and Rebounds": "ribaund+asist",
+}
+BAREM_SAYFA_BOYU = 1000
+
+
+def barem_ayristir(ogeler):
+    """propBets kayıtlarını oyuncu ve pazar başına tek satıra indirir.
+
+    Besleme her oyuncu ve pazar için aynı baremi taşıyan iki kayıt verir (iki tarafın oranı); hangisinin üst olduğu
+    yazmaz, o yüzden oranlar geldikleri sırayla 'oran_1' ve 'oran_2' olarak saklanır. İki kaydı ya da ortak baremi
+    olmayan oyuncu-pazar çifti atlanır. Döndürür: (satırlar, atlanan çift sayısı); satır: {'espn_oyuncu_id',
+    'istatistik', 'cizgi', 'acilis_cizgi', 'oran_1', 'oran_2', 'acilis_oran_1', 'acilis_oran_2', 'guncelleme'}
+    """
+    def sayi(deger):
+        try:
+            return float(deger)
+        except (TypeError, ValueError):
+            return None
+
+    gruplar = {}
+    for kayit in ogeler:
+        istatistik = BAREM_PAZARLARI.get(((kayit.get("type") or {}).get("name")))
+        m = re.search(r"/athletes/(\d+)", (kayit.get("athlete") or {}).get("$ref") or "")
+        if istatistik and m:
+            gruplar.setdefault((int(m.group(1)), istatistik), []).append(kayit)
+    satirlar, atlanan = [], 0
+    for (kimlik, istatistik), kayitlar in gruplar.items():
+        oranlar = [k.get("odds") or {} for k in kayitlar]
+        cizgiler = {sayi((o.get("total") or {}).get("value")) for o in oranlar}
+        if len(kayitlar) != 2 or len(cizgiler) != 1 or None in cizgiler:
+            atlanan += 1
+            continue
+        satirlar.append({
+            "espn_oyuncu_id": kimlik, "istatistik": istatistik, "cizgi": cizgiler.pop(),
+            "acilis_cizgi": sayi((oranlar[0].get("total") or {}).get("open")),
+            "oran_1": sayi((oranlar[0].get("decimal") or {}).get("value")), "oran_2": sayi((oranlar[1].get("decimal") or {}).get("value")),
+            "acilis_oran_1": sayi((oranlar[0].get("decimal") or {}).get("open")), "acilis_oran_2": sayi((oranlar[1].get("decimal") or {}).get("open")),
+            "guncelleme": max((k.get("lastUpdated") or "" for k in kayitlar)) or None})
+    return satirlar, atlanan
+
+
+def oyuncu_baremleri(espn_mac_id):
+    """Bir maçın oyuncu baremleri. Döndürür: (sağlayıcı adı, satırlar, atlanan çift sayısı); barem açılmamışsa (None, [], 0).
+
+    Maç başına en az iki istek: oran kaydı (sağlayıcıyı ve beslemenin varlığını verir), ardından barem sayfaları.
+    """
+    ad = f"ESPN oyuncu baremleri {espn_mac_id}"
+    taban = ESPN_MAC_ORANI_URL.format(kimlik=espn_mac_id)
+    veri = _json_al(taban, f"ESPN maç oranı {espn_mac_id}")
+    saglayici = next((o.get("provider") or {} for o in (veri.get("items") or []) if o.get("propBets")), None) if isinstance(veri, dict) else None
+    if not saglayici or not saglayici.get("id"):
+        return None, [], 0
+    ogeler, sayfa, sayfa_sayisi = [], 1, 1
+    while sayfa <= sayfa_sayisi:
+        yanit = _json_al(f"{taban}/{saglayici['id']}/propBets?limit={BAREM_SAYFA_BOYU}&page={sayfa}", ad)
+        if not isinstance(yanit, dict) or not isinstance(yanit.get("items"), list):
+            raise KaynakHatasi(f"{ad}: beklenen yapı yok ('items' listesi)")
+        ogeler += yanit["items"]
+        sayfa_sayisi = min(int(yanit.get("pageCount") or 1), 10)
+        sayfa += 1
+    satirlar, atlanan = barem_ayristir(ogeler)
+    return saglayici.get("name"), satirlar, atlanan
+
+
 def _oyuncu_kimligi(oyuncu):
     """ESPN oyuncu kimliği. Beslemede 'id' alanı boş geliyor; kimlik oyuncu sayfası bağlantısından okunur."""
     if oyuncu.get("id"):

@@ -6,7 +6,8 @@
 Sabah çalıştırmasının göremediği, gün içinde netleşen veriler yeniden çekilir: sakatlıklar (ESPN ve
 NBA resmi raporu), bahis çizgileri, hakem atamaları, ilk beşler. Ardından yalnızca HENÜZ BAŞLAMAMIŞ
 maçların tahminleri yenilenir ve "kesin tahmin" olarak işaretlenir. Başlamış maçların tahmini olduğu
-gibi kalır.
+gibi kalır. Akşam çalıştırması ayrıca bahis sitesinin oyuncu baremlerini günde bir kez kaydeder
+(oyuncu_barem tablosu); bu veri şimdilik yalnızca biriktirilir, tahminlerde kullanılmaz.
 
 --yaklasan kipi sık aralıklarla (örneğin 15 dakikada bir) çalıştırılmak içindir: yaklaşan maç yoksa
 hiçbir kaynağa gitmeden hemen çıkar; varsa kesin ilk beşleri ve son sakatlık durumunu yakalar.
@@ -34,6 +35,7 @@ def aksam_adimlari(tarih, pencere_dk=None):
         ("ilk_besler", False, lambda c: yukle.ilk_besleri_yukle(c, tarih)),
     ]
     if pencere_dk is None:
+        adimlar.append(("oyuncu_baremleri", False, lambda c: yukle.oyuncu_baremlerini_yukle(c, tarih)))     # günde bir kez; yalnızca biriktirilir
         adimlar.append(("onsuz_ve_hakem_tablolari", False, lambda c: gunluk._tablolari_yaz(c, tarih)))
     adimlar.append(("tahmin", True, lambda c: len(tahmin.gunu_tahmin_et(c, tarih, calistirma="mac_oncesi", yalniz_baslamamis=True, pencere_dk=pencere_dk))))
     adimlar.append(("site_veri", False, lambda c: len(site_veri.hazirla(c))))      # paylaşılan web sayfası için JSON dosyaları

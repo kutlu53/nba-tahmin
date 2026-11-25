@@ -135,7 +135,7 @@ class OnKesinTesti(unittest.TestCase):
 
     def test_aksam_adimlari(self):
         adlar = [ad for ad, _, _ in mac_oncesi.aksam_adimlari(BUGUN)]
-        self.assertEqual(adlar, ["sakatlik", "resmi_sakatlik", "oranlar", "atamalar", "ilk_besler", "onsuz_ve_hakem_tablolari", "tahmin", "site_veri"])
+        self.assertEqual(adlar, ["sakatlik", "resmi_sakatlik", "oranlar", "atamalar", "ilk_besler", "oyuncu_baremleri", "onsuz_ve_hakem_tablolari", "tahmin", "site_veri"])
 
 
 if __name__ == "__main__":

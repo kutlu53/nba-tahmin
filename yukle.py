@@ -7,6 +7,7 @@ import logging
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -420,6 +421,50 @@ def oranlari_yukle(conn, tarih=None):
     return len(satirlar), mac_sayisi
 
 
+def oyuncu_baremlerini_yukle(conn, tarih=None, yeniden=False):
+    """Günün henüz başlamamış maçlarında bahis sitesinin oyuncu baremlerini (ESPN üzerinden) oyuncu_barem tablosuna yazar.
+
+    Günde bir kez, akşam çalıştırmasında çekilir: baremi daha önce yazılmış maç yeniden çekilmez (yeniden=True ise çekilir).
+    Veri şimdilik yalnızca biriktirilir; tahminlerde ve günün seçimlerinde kullanılmaz.
+    Döndürür: (baremi yazılan maç, yazılan satır, oyuncular tablosunda bulunamayan oyuncu sayısı)
+    """
+    tarih = tarih or veritabani.abd_bugun()
+    simdi = veritabani.simdi_utc()
+    baslamamis = {s[0] for s in conn.execute("SELECT mac_id FROM maclar WHERE tarih = ? AND durum = 'oynanacak' AND baslama_utc > ?",
+                                             (tarih, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")))}
+    var = {s[0] for s in conn.execute("SELECT DISTINCT mac_id FROM oyuncu_barem WHERE tarih = ?", (tarih,))}
+    if not (baslamamis if yeniden else baslamamis - var):
+        log.info("Oyuncu baremleri (%s): çekilecek maç yok (başlamamış %d, daha önce yazılmış %d)", tarih, len(baslamamis), len(var))
+        return 0, 0, 0                      # kaynağa hiç gidilmez
+    eslesen, _ = _espn_mac_eslemesi(conn, tarih)
+    oyuncu = {s["espn_id"]: s["oyuncu_id"] for s in conn.execute("SELECT espn_id, oyuncu_id FROM oyuncular WHERE espn_id IS NOT NULL")}
+    mac_sayisi, satir_sayisi, bulunamayan, alinamayan = 0, 0, set(), []
+    for mac_id, m in eslesen:
+        if mac_id not in baslamamis or (mac_id in var and not yeniden):
+            continue
+        time.sleep(config.ESPN_BEKLEME_SN)
+        try:
+            saglayici, satirlar, atlanan = espn.oyuncu_baremleri(m["espn_mac_id"])
+        except KaynakHatasi as e:              # bir maçın alınamaması ötekileri durdurmaz; adım sonunda hata olarak bildirilir
+            log.warning("Oyuncu baremleri: maç %s alınamadı: %s", mac_id, e)
+            alinamayan.append(mac_id)
+            continue
+        if atlanan:
+            log.warning("Oyuncu baremleri: maç %s, beklenen iki kaydı olmayan %d oyuncu-pazar çifti atlandı", mac_id, atlanan)
+        if not satirlar:
+            continue
+        bulunamayan |= {s["espn_oyuncu_id"] for s in satirlar if s["espn_oyuncu_id"] not in oyuncu}
+        sabit = {"mac_id": mac_id, "tarih": tarih, "saglayici": saglayici, "cekim_zamani": simdi}
+        satir_sayisi += veritabani.goruntu_yaz(conn, "oyuncu_barem", {"mac_id": mac_id},
+                                                [{**s, **sabit, "oyuncu_id": oyuncu.get(s["espn_oyuncu_id"])} for s in satirlar])
+        mac_sayisi += 1
+    log.info("Oyuncu baremleri (%s): %d maçta %d barem yazıldı; başlamamış maç %d, daha önce yazılmış %d, eşlenemeyen oyuncu %d",
+             tarih, mac_sayisi, satir_sayisi, len(baslamamis), len(var & baslamamis) if not yeniden else 0, len(bulunamayan))
+    if alinamayan:
+        raise KaynakHatasi(f"Oyuncu baremleri: {len(alinamayan)} maç alınamadı ({', '.join(alinamayan)}); {mac_sayisi} maç yazıldı")
+    return mac_sayisi, satir_sayisi, len(bulunamayan)
+
+
 def gecmis_oranlari_yukle(conn):
     """Oynanmış ve kapanış çizgisi henüz yazılmamış maçların oranlarını çeker (maç başına bir istek). Döndürür: (yazılan, oransız kalan)."""
     gunler = [s[0] for s in conn.execute("""
@@ -571,6 +616,7 @@ ADIMLAR = {
     "tempo_dogrula": tempo_karsilastir,
     "kullanim": kullanim_oranlarini_yaz,
     "oranlar": oranlari_yukle,
+    "oyuncu_baremleri": lambda conn: oyuncu_baremlerini_yukle(conn, yeniden=True),      # elle çalıştırma: yazılmış olsa da yeniden çeker
     "takip": takip_verisini_yukle,
     "hakemler": hakemleri_yukle,
     "atamalar": atamalari_yukle,
