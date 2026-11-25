@@ -7,8 +7,9 @@ betikler oraya doğrudan yazamaz). Dosyalar:
     gecmis_YYYY-AA-GG.json  -> gecmis/YYYY-AA-GG   o günün üst / alt seçimleri, gerçekleşen değerler ve hata özeti
     yazilacaklar.json       aktarılacak belgelerin listesi
 
-"Günün üst / alt seçimleri": modelin en emin olduğu üst ve alt tarafları (aşağıdaki UA_ ayarları). Canlı bir günün
-geçmiş belgesinde, o gün sayfada gösterilen seçimlerin aynısı sonuçlarıyla yer alır (oynamayan oyuncu "oynamadı" görünür).
+"Günün üst / alt seçimleri": modelin sezon ortalamasından en çok ayrıldığı üst ve alt tarafları (aşağıdaki UA_ ayarları).
+Canlı bir günün geçmiş belgesinde, o gün sayfada gösterilen seçimlerin aynısı sonuçlarıyla yer alır (oynamayan oyuncu
+"oynamadı" görünür).
 
 Çalıştırma:  .venv\\Scripts\\python.exe site_veri.py
 """
@@ -30,6 +31,23 @@ GECMIS_GUN = 40
 UA_ISTATISTIKLERI = {"sayi": 8.5, "ribaund": 3.5, "asist": 2.5, "ucluk": 1.5, "sayi+ribaund+asist": 15.5}   # istatistik: en küçük çizgi
 UA_MIN_DAKIKA, UA_MIN_GUVEN, UA_MIN_OLASILIK, UA_ADET = 20, 60, 0.58, 6          # taraf başına en çok UA_ADET seçim, oyuncu başına bir
 
+# Sıralama: seçimler ham olasılığa göre değil, modelin kattığı farka göre sıralanır (olasılık − baremin kendiliğinden
+# verdiği olasılık; bkz. barem_olasiligi). Ham olasılık sıralaması düşük baremli istatistikleri, özellikle üçlük altlarını
+# öne çıkarıyordu: ortalaması 2,1 olan oyuncunun 2,5 baremi, model hiçbir şey katmadan alt %65 verir.
+# 25 Kasım 2026 denemesi (29 gün, 285 seçim): üçlük payı %39 → %14, sayı %21 → %31; tutma oranı %68,8 → %64,2;
+# modelin katkısı (tutan − baremin kendiliğinden verdiği) +10,9 → +12,1 puan. Olasılık eşiği (UA_MIN_OLASILIK) aynı kaldı.
+UA_FARK_BASLANGIC = "2026-11-25"     # canlı günlerde bu tarihten başlayarak; önceki canlı günler yayımlandıkları kuralla (en yüksek olasılık) kalır
+
+
+def fark_sirasi_mi(tarih, tur):
+    """O günün seçimleri fark sıralamasıyla mı yapılır? Geriye dönük günlerde her zaman; canlı günlerde başlangıç tarihinden sonra."""
+    return tur != "canli" or tarih >= UA_FARK_BASLANGIC
+
+
+def barem_olasiligi(sezon, tahmin, sapma, cizgi):
+    """Baremin kendiliğinden verdiği üst olasılığı: model sezon ortalamasını aynen tahmin etseydi (varyans ortalamayla orantılı)."""
+    return ust_alt.ust_olasiligi(float(sezon), sapma * math.sqrt(sezon / tahmin) if tahmin > 0 else sapma, cizgi)
+
 
 UA_BANTLARI = (58, 65, 75, 101)      # güven yüzdesi bantları: 58–64, 65–74, 75 ve üstü
 
@@ -38,8 +56,11 @@ def ua_bandi(olasilik):
     return max(i for i, alt in enumerate(UA_BANTLARI[:-1]) if olasilik >= alt)
 
 
-def ust_alt_secimleri(df, puanli=False, yalniz_oynayanlar=False):
-    """Modelin en emin olduğu üst ve alt seçimleri.
+def ust_alt_secimleri(df, puanli=False, yalniz_oynayanlar=False, fark_sirasi=True):
+    """Günün üst ve alt seçimleri: olasılığı eşiği geçen adaylar arasından, taraf başına en çok UA_ADET oyuncu.
+
+    fark_sirasi=True ise adaylar modelin kattığı farka göre sıralanır ve farkı sıfırdan büyük olmayanlar alınmaz;
+    False ise eski kural geçerlidir (en yüksek olasılık önce). Her kayıtta 'fark' (yüzde puanı) bulunur.
 
     puanli=True ise her seçime sonuç eklenir: 'gercek' (gerçekleşen değer), 'tuttu' (1 / 0) ve 'bitti' (maçın sonucu
     işlendi mi). Oyuncu oynamadıysa 'gercek' ve 'tuttu' None kalır. yalniz_oynayanlar=True seçimi yalnızca gerçekleşen
@@ -66,20 +87,24 @@ def ust_alt_secimleri(df, puanli=False, yalniz_oynayanlar=False):
             if cizgi < en_kucuk:
                 continue
             tahmin = float(t.loc[kimlik, ist])
-            p = ust_alt.ust_olasiligi(tahmin, (float(u.loc[kimlik, ist]) - tahmin) / config.ARALIK_Z, cizgi)
-            taraf, olasilik = ("ust", p) if p >= 0.5 else ("alt", 1 - p)
+            sapma = (float(u.loc[kimlik, ist]) - tahmin) / config.ARALIK_Z
+            p = ust_alt.ust_olasiligi(tahmin, sapma, cizgi)
+            p0 = barem_olasiligi(sezon, tahmin, sapma, cizgi)
+            taraf, olasilik, fark = ("ust", p, p - p0) if p >= 0.5 else ("alt", 1 - p, p0 - p)
             kayit = {"oyuncu": b["isim"], "takim": b["takim"], "mac": b["mac"], "ist": ist, "cizgi": cizgi, "taraf": taraf,
-                     "olasilik": round(100 * olasilik), "tahmin": round(tahmin, 1), "guven": round(float(g.loc[kimlik, ist]))}
+                     "olasilik": round(100 * olasilik), "fark": round(100 * fark), "tahmin": round(tahmin, 1), "guven": round(float(g.loc[kimlik, ist]))}
             if puanli:
                 gercek = gr.loc[kimlik, ist]
                 oynadi = not pd.isna(gercek)
                 kayit.update({"gercek": int(gercek) if oynadi else None, "bitti": b["mac_id"] in biten_maclar,
                               "tuttu": int((float(gercek) > cizgi) == (taraf == "ust")) if oynadi else None})
-            adaylar.append((olasilik, kimlik, kayit))
+            adaylar.append((olasilik, kimlik, kayit, fark))
+    olcut = 3 if fark_sirasi else 0          # sıralama ölçütü: fark ya da olasılık
+    uygun = [a for a in adaylar if a[0] >= UA_MIN_OLASILIK and (a[3] > 0 or not fark_sirasi)]
     secilen = []
     for taraf in ("ust", "alt"):
         gorulen = set()
-        for olasilik, kimlik, kayit in sorted((a for a in adaylar if a[2]["taraf"] == taraf and a[0] >= UA_MIN_OLASILIK), key=lambda a: -a[0]):
+        for _, kimlik, kayit, _ in sorted((a for a in uygun if a[2]["taraf"] == taraf), key=lambda a: -a[olcut]):
             if kimlik not in gorulen:
                 gorulen.add(kimlik)
                 secilen.append(kayit)
@@ -126,12 +151,12 @@ def gun_belgesi(conn, tarih):
                        "oyuncular": oyuncular})
     maclar.sort(key=lambda m: (m["baslama_utc"] or "", m["mac_id"]))
     return {"tarih": tarih, "guncelleme": veritabani.simdi_utc(), "oyuncu_sayisi": int(df["oyuncu_id"].nunique()),
-            "ust_alt": ust_alt_secimleri(df), "maclar": maclar}
+            "ust_alt": ust_alt_secimleri(df, fark_sirasi=fark_sirasi_mi(tarih, "canli")), "maclar": maclar}
 
 
 def gecmis_ust_alt(conn, tarih, tur):
     """O günün üst / alt seçimleri sonuçlarıyla. Canlı günde sayfada gösterilen seçimlerin aynısıdır (bütün tahminler arasından)."""
-    return ust_alt_secimleri(_tahminler(conn, tarih, tur), puanli=True, yalniz_oynayanlar=(tur != "canli"))
+    return ust_alt_secimleri(_tahminler(conn, tarih, tur), puanli=True, yalniz_oynayanlar=(tur != "canli"), fark_sirasi=fark_sirasi_mi(tarih, tur))
 
 
 def gecmis_belgesi(conn, tarih, tur, ua=None):

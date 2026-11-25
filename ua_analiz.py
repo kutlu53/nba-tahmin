@@ -14,6 +14,10 @@ Seçim kuralı sayfadakiyle aynıdır (site_veri.ust_alt_secimleri); burada ayr�
 İlk çalıştırma 24 Kasım 2026: alt seçimleri kalibreli (söylenen %76,6, gerçekleşen %76,0; 171 seçim), üst seçimleri
 5 puan iyimser (%62,9'a karşı %57,9; 114 seçim); üstte kayıpların çoğu oyuncunun beklenenden az oynadığı maçlardan.
 O gün ayar değiştirilmedi; 8–10 canlı gün birikince yeniden bakılacak.
+
+25 Kasım 2026: seçimler artık modelin kattığı farka göre sıralanıyor (gerekçe ve ölçümler site_veri.py içinde); yukarıdaki
+sayılar eski sıralamaya (en yüksek olasılık) aittir. Satırlardaki "barem kendiliğinden", model sezon ortalamasına hiçbir
+şey katmasaydı aynı seçimlerin tutma olasılığıdır.
 """
 import math
 import sqlite3
@@ -54,27 +58,33 @@ def adaylar(df, tarih, tur):
             if cizgi < en_kucuk:
                 continue
             tahmin = float(t.loc[kimlik, ist])
-            p = ust_alt.ust_olasiligi(tahmin, (float(u.loc[kimlik, ist]) - tahmin) / config.ARALIK_Z, cizgi)
-            taraf, olasilik = ("ust", p) if p >= 0.5 else ("alt", 1 - p)
+            sapma = (float(u.loc[kimlik, ist]) - tahmin) / config.ARALIK_Z
+            p = ust_alt.ust_olasiligi(tahmin, sapma, cizgi)
+            p0 = sv.barem_olasiligi(sezon, tahmin, sapma, cizgi)
+            taraf, olasilik, olasilik0 = ("ust", p, p0) if p >= 0.5 else ("alt", 1 - p, 1 - p0)
             oynadi = not pd.isna(gr.loc[kimlik, ist])
             gercek = float(gr.loc[kimlik, ist]) if oynadi else None
             cikti.append({"tarih": tarih, "tur": tur, "kimlik": int(kimlik), "oyuncu": b["isim"], "mac_id": b["mac_id"], "ist": ist, "cizgi": cizgi,
-                          "taraf": taraf, "p": olasilik, "tahmin": tahmin, "sezon": float(sezon), "guven": float(g.loc[kimlik, ist]),
+                          "taraf": taraf, "p": olasilik, "p0": olasilik0, "fark": olasilik - olasilik0, "tahmin": tahmin, "sezon": float(sezon), "guven": float(g.loc[kimlik, ist]),
                           "bdk": float(b["dakika"]), "gercek": gercek, "ust_oldu": int(gercek > cizgi) if oynadi else None,
                           "tuttu": int((gercek > cizgi) == (taraf == "ust")) if oynadi else None})
     return cikti
 
 
 def sec(gunluk, esik=None, adet=None):
-    """Sayfadaki seçim: taraf başına en emin 'adet' oyuncu, olasılık eşiğin üstünde. esik: {'ust': x, 'alt': y}
+    """Sayfadaki seçim: taraf başına en çok 'adet' oyuncu, olasılık eşiğin üstünde. esik: {'ust': x, 'alt': y}
 
-    Döndürülen liste yalnızca sonuçlanmış seçimleri içerir (seçilip de oynamayan oyuncu yer tutar ama sayılmaz).
+    Sıralama o günün kuralıyladır (site_veri.fark_sirasi_mi): modelin kattığı fark ya da, 25 Kasım 2026'dan önceki canlı
+    günlerde, en yüksek olasılık. Döndürülen liste yalnızca sonuçlanmış seçimleri içerir (seçilip de oynamayan oyuncu
+    yer tutar ama sayılmaz).
     """
     esik = esik or {"ust": sv.UA_MIN_OLASILIK, "alt": sv.UA_MIN_OLASILIK}
+    fark_sirasi = bool(gunluk) and sv.fark_sirasi_mi(gunluk[0]["tarih"], gunluk[0]["tur"])
+    olcut = "fark" if fark_sirasi else "p"
     secilen = []
     for taraf in ("ust", "alt"):
         gorulen = set()
-        for a in sorted((a for a in gunluk if a["taraf"] == taraf and a["p"] >= esik[taraf]), key=lambda a: -a["p"]):
+        for a in sorted((a for a in gunluk if a["taraf"] == taraf and a["p"] >= esik[taraf] and (a["fark"] > 0 or not fark_sirasi)), key=lambda a: -a[olcut]):
             if a["kimlik"] not in gorulen:
                 gorulen.add(a["kimlik"])
                 secilen.append(a)
@@ -97,7 +107,8 @@ def satir(ad, x):
     alt, ust = wilson(k, n)
     soylenen = sum(a["p"] for a in x) / n
     return (f"  {ad:<26} {n:>5}  söylenen %{100 * soylenen:4.1f}  gerçekleşen %{100 * k / n:4.1f}  "
-            f"({k}/{n}; %95 aralık {100 * alt:.0f}–{100 * ust:.0f})  fark {100 * (k / n - soylenen):+5.1f}")
+            f"({k}/{n}; %95 aralık {100 * alt:.0f}–{100 * ust:.0f})  fark {100 * (k / n - soylenen):+5.1f}"
+            f"  barem kendiliğinden %{100 * sum(a['p0'] for a in x) / n:4.1f}")
 
 
 def dk_sinifi(a):

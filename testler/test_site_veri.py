@@ -55,5 +55,44 @@ class UstAltSecimTesti(unittest.TestCase):
         self.assertTrue(all(x["olasilik"] >= 100 * site_veri.UA_MIN_OLASILIK for x in s))
 
 
+def kolay_barem():
+    """Üçlük baremi kendiliğinden kolay (ortalama 2,05, barem 2,5); model yalnızca sayıda sezon ortalamasından ayrılıyor."""
+    sezon = {"sayi": 20.2, "ribaund": 6.4, "asist": 5.3, "ucluk": 2.05}
+    tahmin = {"sayi": 19.0, "ribaund": 6.4, "asist": 5.3, "ucluk": 2.05, "sayi+ribaund+asist": 30.7}       # sayı alt %62, üçlük alt %66
+    return pd.DataFrame(satirlar(1, "Oyuncu", "M1", tahmin, sezon, None))
+
+
+class SiralamaTesti(unittest.TestCase):
+    def test_eski_kural_en_yuksek_olasilik(self):
+        s = site_veri.ust_alt_secimleri(kolay_barem(), fark_sirasi=False)
+        self.assertEqual([(x["ist"], x["taraf"]) for x in s], [("ucluk", "alt")])
+        self.assertEqual(s[0]["fark"], 0)                     # model üçlükte sezon ortalamasına hiçbir şey katmıyor
+
+    def test_fark_sirasi_modelin_ayrildigi_istatistigi_secer(self):
+        s = site_veri.ust_alt_secimleri(kolay_barem())
+        self.assertEqual([(x["ist"], x["taraf"]) for x in s], [("sayi", "alt")])
+        self.assertGreater(s[0]["fark"], 0)
+        self.assertGreaterEqual(s[0]["olasilik"], 100 * site_veri.UA_MIN_OLASILIK)
+
+    def test_farki_olmayan_aday_alinmaz(self):
+        df = kolay_barem()
+        df.loc[df["istatistik"].isin(["sayi", "sayi+ribaund+asist"]), "tahmin"] = [20.2, 31.9]      # model hiçbir istatistikte ayrılmıyor
+        df["ust"] = df["tahmin"] * 1.5
+        self.assertEqual(site_veri.ust_alt_secimleri(df), [])
+        self.assertEqual(len(site_veri.ust_alt_secimleri(df, fark_sirasi=False)), 1)
+
+    def test_baslangic_tarihi(self):
+        once = "2026-11-24"
+        self.assertLess(once, site_veri.UA_FARK_BASLANGIC)
+        self.assertFalse(site_veri.fark_sirasi_mi(once, "canli"))                    # yayımlandığı kuralla kalır
+        self.assertTrue(site_veri.fark_sirasi_mi(site_veri.UA_FARK_BASLANGIC, "canli"))
+        self.assertTrue(site_veri.fark_sirasi_mi(once, "geri_test"))
+
+    def test_barem_olasiligi_tahminden_bagimsiz(self):
+        # Tahmin sezon ortalamasına eşitse baremin verdiği olasılık modelin olasılığıdır.
+        self.assertAlmostEqual(site_veri.barem_olasiligi(2.05, 2.05, 0.8, 2.5), site_veri.ust_alt.ust_olasiligi(2.05, 0.8, 2.5))
+        self.assertLess(site_veri.barem_olasiligi(2.05, 2.05, 0.8, 2.5), 0.42)       # yani alt en az %58: barem kendiliğinden kolay
+
+
 if __name__ == "__main__":
     unittest.main()
